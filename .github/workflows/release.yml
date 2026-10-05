@@ -1,0 +1,53 @@
+name: Release
+
+# Publishes a signed APK (+ AAB for Play) when you push a tag like v1.4.2,
+# or run it by hand from the Actions tab. Requires the three signing secrets
+# (WATCHKEY_KEYSTORE_BASE64, WATCHKEY_KEYSTORE_PASSWORD, WATCHKEY_KEY_ALIAS)
+# and the signingConfig edit in app/build.gradle (see README-ci notes).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.WATCHKEY_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Signing secrets are missing. Add WATCHKEY_KEYSTORE_BASE64, WATCHKEY_KEYSTORE_PASSWORD, WATCHKEY_KEY_ALIAS."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+
+      - name: Build signed APK and App Bundle
+        env:
+          WATCHKEY_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          WATCHKEY_KEYSTORE_PASSWORD: ${{ secrets.WATCHKEY_KEYSTORE_PASSWORD }}
+          WATCHKEY_KEY_ALIAS: ${{ secrets.WATCHKEY_KEY_ALIAS }}
+        run: chmod +x ./gradlew && ./gradlew assembleRelease bundleRelease
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          files: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
+          body: |
+            Signed build of TeslaWearKey (your fork).
+            Install the .apk on the watch; the .aab is for Google Play.
+
+            Unofficial, uses a reverse-engineered NFC protocol. Carry your key card.
