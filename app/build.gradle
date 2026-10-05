@@ -17,10 +17,28 @@ android {
 
     }
 
+    // Release signing comes from the environment (GitHub secrets in CI), never
+    // from the repo. If the env vars are absent (e.g. a local debug build), the
+    // release build is simply left unsigned.
+    signingConfigs {
+        release {
+            def kp = System.getenv("WATCHKEY_KEYSTORE_PATH")
+            if (kp != null) {
+                storeFile file(kp)
+                storePassword System.getenv("WATCHKEY_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("WATCHKEY_KEY_ALIAS")
+                keyPassword System.getenv("WATCHKEY_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (System.getenv("WATCHKEY_KEYSTORE_PATH") != null) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
